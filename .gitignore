@@ -1,0 +1,74 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.ruff_cache/
+
+# Virtual environments
+venv/
+.venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+log*.txt
+
+# Test outputs
+test_*
+.pytest_cache/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node.js
+node_modules/
+*.log
+package-lock.json
+# Keep the dashboard lockfile so CI can `npm ci` reproducibly
+!src/dashboard/dashboard/package-lock.json
+
+# Frontend build output (built in CI, shipped in wheel, never committed)
+src/dashboard/static/
+src/dashboard/dashboard/dist/
+
+# TypeScript build artifacts (keep dist/ for convenience)
+*.tsbuildinfo
+
+# Local config overrides
+.envrc
+.claude/
+.codex
+
+# AnyPoC specific
+**/.dashboard_config.json
+*output/
+*.traj.html
+*.traj.json
+*.raw.md
+/projects/

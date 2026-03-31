@@ -1,0 +1,72 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "anypoc"
+version = "1.0.0"
+description = "A universal proof-of-concept generator"
+readme = "README.md"
+requires-python = ">=3.10"
+keywords = []
+authors = [{ name = "Zijie Zhao", email = "zzjas98@gmail.com" }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Bug Tracking",
+    "Programming Language :: Python :: 3.10",
+]
+dependencies = [
+    "coding-agent-wrapper>=0.1.1",
+    "rich",
+    "pyyaml",
+    "pydantic>=2.0",
+    "fastapi>=0.115.0",
+    "typer>=0.21.0",
+    "markdown>=3.5.0",
+    "pygments>=2.17.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "pytest-cov>=4.0",
+    "pytest-xdist>=3.0",    # Parallel test execution
+    "ruff>=0.9",
+    "mypy",
+    "prek",
+]
+
+[project.urls]
+Homepage = "https://github.com/zzjas/anypoc"
+
+[project.scripts]
+anypoc = "anypoc.cli:main"
+anypoc-perm = "anypoc.utils.permissions:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+packages = { find = { where = ["src"], include = ["anypoc*", "scanner*", "dashboard", "skills"], exclude = ["projects*", "tmp*", "test*", "output*", "dashboard.dashboard*"] } }
+
+[tool.setuptools.package-data]
+skills = ["**/*"]
+dashboard = ["static/**/*"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+exclude = [
+    ".eggs",
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".tox",
+    ".venv",
+    "build",
+    "dist",
+]
+
+[tool.ruff.lint]
+ignore = ["E203", "E266"]
