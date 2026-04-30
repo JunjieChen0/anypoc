@@ -249,6 +249,7 @@ def init(name: str = typer.Argument(..., help="Name of the project to initialize
 @app.command()
 def status(
     name: str = typer.Argument(..., help="Name of the project to inspect", autocompletion=complete_project_name),
+    local: Annotated[bool, typer.Option("--local", "-l", help="Skip remote registry check for image status")] = False,
 ):
     """Inspect the status of a project."""
     project = Project(name)
@@ -283,6 +284,19 @@ def status(
         typer.echo(f"\nProject '{name}' not found at {project.config_dir}")
         typer.echo(f"Run 'python -m poc.project init {name}' to create it.")
         raise typer.Exit(1)
+
+    # Docker image status
+    image = project.get_image_info()
+    image_status, image_info = check_image_status(image, skip_remote=local)
+    console.print(f"\n[Docker Image] ({image.full_name})")
+    console.print(f"  Status:  {_get_status_str(image_status.value)}")
+    console.print(f"  Built:   {image_info.get('local_created') or '-'}")
+    if image_info.get("local_digest"):
+        console.print(f"  Local:   {image_info['local_digest']}")
+    if image_info.get("remote_digest"):
+        console.print(f"  Remote:  {image_info['remote_digest']}")
+    if image_info.get("dockerfile_newer"):
+        console.print("  [yellow]⚠ Dockerfile is newer than the built image — consider rebuilding[/yellow]")
 
     # Output status
     typer.echo(f"\n[Output Data] ({project.output_dir})")
