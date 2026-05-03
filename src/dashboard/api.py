@@ -552,21 +552,13 @@ def get_monitor_poc_detail(project: str, name: str, attempt: int | None = None):
         selected_status = _get_attempt_status(selected_attempt_dir)
         color = _get_poc_color(selected_status)
 
-        # Build steps - analysis is shared (from first attempt), rest from selected attempt
+        # Build steps - all steps from selected attempt
         steps = []
         for step_name in POC_STEPS:
-            # Analysis is shared across attempts, use first attempt
-            if step_name == "analysis":
-                source_status = _get_attempt_status(first_attempt_dir)
-                source_dir = first_attempt_dir
-            else:
-                source_status = selected_status
-                source_dir = selected_attempt_dir
-
-            step_data = source_status.get(step_name, {})
+            step_data = selected_status.get(step_name, {})
             step_status = step_data.get("status", "pending")
 
-            traj_file = _get_step_traj_file(source_dir, step_name)
+            traj_file = _get_step_traj_file(selected_attempt_dir, step_name)
             fs = FastStats.from_path(traj_file) if traj_file else None
             step_cost = fs.cost_usd if fs is not None else None
 
