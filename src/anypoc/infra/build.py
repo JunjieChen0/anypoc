@@ -355,24 +355,42 @@ def get_build_order() -> list[str]:
     return list(BASE_IMAGES.keys())
 
 
-def build_image(image: ImageInfo, no_cache: bool = False, push: bool = False, memory: Optional[str] = None) -> bool:
-    """Build a single image."""
+def build_image(
+    image: ImageInfo,
+    no_cache: bool = False,
+    push: bool = False,
+    memory: Optional[str] = None,
+    local_base: bool = False,
+) -> bool:
+    """Build a single image.
+
+    By default the Dockerfile's `FROM ${BASE_IMAGE}` resolves to the registry
+    default baked into the Dockerfile (`zzjas/anypoc-…:latest`). Pass
+    ``local_base=True`` to override `BASE_IMAGE` with the locally-built tag
+    instead — useful when iterating on the base/common layer without pushing.
+    """
     console.print(f"\n[bold]Building {image.full_name}...[/bold]")
 
     if not image.dockerfile.exists():
         console.print(f"[red]Dockerfile not found:[/red] {image.dockerfile}")
         return False
 
-    # For images with dependencies, check that the base image exists
+    # For images with dependencies, only override BASE_IMAGE when --local-base
+    # was requested. Otherwise let the Dockerfile's `ARG BASE_IMAGE=zzjas/…`
+    # default kick in so the build pulls the registry copy.
     base_image_name = None
-    if image.base_image:
+    if image.base_image and local_base:
         base_info = IMAGES[image.base_image]
         base_image_name = base_info.full_name
         if not get_local_image_digest(base_image_name):
-            console.print(f"[red]Dependency '{base_image_name}' not found[/red]")
-            console.print(f"[dim]  Run: p infra build {image.base_image} first[/dim]")
+            console.print(f"[red]--local-base requested but '{base_image_name}' not built locally[/red]")
+            console.print(f"[dim]  Run: p infra build {image.base_image} --local-base first[/dim]")
             return False
-        console.print(f"[dim]  Base: {base_image_name}[/dim]")
+        console.print(f"[dim]  Base (local override): {base_image_name}[/dim]")
+    elif image.base_image:
+        console.print(
+            f"[dim]  Base: registry default (pass --local-base to use local {IMAGES[image.base_image].full_name})[/dim]"
+        )
 
     cmd = get_build_cmd(
         image,
@@ -518,6 +536,13 @@ def build(
     push: Annotated[bool, typer.Option("--push", help="Push after building")] = False,
     keep_going: Annotated[bool, typer.Option("--keep-going", "-k", help="Continue on errors")] = False,
     memory: Annotated[str, typer.Option("--memory", "-m", help="Memory limit for build (e.g., 64g, 128g)")] = "128g",
+    local_base: Annotated[
+        bool,
+        typer.Option(
+            "--local-base",
+            help="Build dependent images FROM the locally-built base tag instead of the registry default",
+        ),
+    ] = False,
 ):
     """Build base images."""
     build_order = get_build_order()
@@ -536,7 +561,7 @@ def build(
     success = True
     for key in build_order:
         image = IMAGES[key]
-        if not build_image(image, no_cache=no_cache, push=push, memory=memory):
+        if not build_image(image, no_cache=no_cache, push=push, memory=memory, local_base=local_base):
             success = False
             if not keep_going:
                 break
