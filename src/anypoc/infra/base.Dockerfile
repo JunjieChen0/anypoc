@@ -85,8 +85,15 @@ RUN uv sync --frozen --no-dev --no-install-project && \
         > /opt/anypoc/.venv/bin/anypoc-perm && \
     chmod 755 /opt/anypoc/.venv/bin/anypoc /opt/anypoc/.venv/bin/anypoc-perm
 
-# Create the container user that will be remapped to the host UID/GID at runtime.
-RUN useradd -m -s /bin/bash playground && \
+# Create the container user with UID/GID matching the host user that ran the build.
+# Defaults to 1000:1000 for portability; build.py injects the real host values via
+# --build-arg PLAYGROUND_UID / PLAYGROUND_GID so files created in the image (e.g.,
+# project source trees chowned to playground) are readable/writable by the same UID
+# on the host without any runtime remapping.
+ARG PLAYGROUND_UID=1000
+ARG PLAYGROUND_GID=1000
+RUN groupadd -o -g ${PLAYGROUND_GID} playground && \
+    useradd -o -m -s /bin/bash -u ${PLAYGROUND_UID} -g ${PLAYGROUND_GID} playground && \
     echo "playground:playground" | chpasswd
 
 # Make the installed toolchain readable to remapped runtime users.

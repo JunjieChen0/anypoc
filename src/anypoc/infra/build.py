@@ -149,6 +149,11 @@ def get_env_build_args() -> dict[str, str]:
     cache_bust = os.environ.get("CACHE_BUST")
     if cache_bust is not None:
         build_args["CACHE_BUST"] = cache_bust
+    # Bake the host user's UID/GID into the playground account so files chowned
+    # to playground inside the image (e.g. /opt/<project>) are owned by the same
+    # UID on the host. Avoids the need for runtime usermod remapping.
+    build_args["PLAYGROUND_UID"] = str(os.getuid())
+    build_args["PLAYGROUND_GID"] = str(os.getgid())
     return build_args
 
 

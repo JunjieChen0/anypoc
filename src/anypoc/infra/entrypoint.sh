@@ -39,44 +39,29 @@ ensure_runtime_dirs() {
 }
 
 configure_runtime_user() {
+  # The playground user's UID/GID are baked into the image at build time to match
+  # the host user (see PLAYGROUND_UID/PLAYGROUND_GID build args in base.Dockerfile).
+  # No runtime usermod/groupmod is needed; if HOST_UID/HOST_GID disagree with the
+  # baked values, log a warning so the user knows to rebuild the image.
+  refresh_target_home
+
   if [ "$(id -u)" -ne 0 ]; then
-    refresh_target_home
     return
   fi
 
-  if [ -z "$HOST_UID" ] || [ -z "$HOST_GID" ]; then
-    log "HOST_UID/HOST_GID not set; using image defaults for ${TARGET_USER}"
-    refresh_target_home
-    ensure_runtime_dirs
-    return
-  fi
-
-  local current_uid current_gid existing_group existing_user
+  local current_uid current_gid
   current_uid="$(id -u "$TARGET_USER")"
   current_gid="$(id -g "$TARGET_USER")"
 
-  if [ "$HOST_GID" != "$current_gid" ]; then
-    existing_group="$(getent group "$HOST_GID" | cut -d: -f1 || true)"
-    if [ -n "$existing_group" ] && [ "$existing_group" != "$TARGET_USER" ]; then
-      log "Using existing group ${existing_group} (GID=${HOST_GID}) for ${TARGET_USER}"
-      usermod -g "$HOST_GID" "$TARGET_USER"
-    else
-      log "Remapping ${TARGET_USER} group to GID=${HOST_GID}"
-      groupmod -o -g "$HOST_GID" "$TARGET_USER"
-    fi
+  if [ -n "$HOST_UID" ] && [ "$HOST_UID" != "$current_uid" ]; then
+    log "WARNING: HOST_UID=${HOST_UID} but image has ${TARGET_USER} UID=${current_uid}."
+    log "  File ownership in /opt may be wrong. Rebuild the image on this host."
+  fi
+  if [ -n "$HOST_GID" ] && [ "$HOST_GID" != "$current_gid" ]; then
+    log "WARNING: HOST_GID=${HOST_GID} but image has ${TARGET_USER} GID=${current_gid}."
+    log "  File ownership in /opt may be wrong. Rebuild the image on this host."
   fi
 
-  if [ "$HOST_UID" != "$current_uid" ]; then
-    existing_user="$(getent passwd "$HOST_UID" | cut -d: -f1 || true)"
-    if [ -n "$existing_user" ] && [ "$existing_user" != "$TARGET_USER" ]; then
-      log "UID ${HOST_UID} already belongs to ${existing_user}; leaving ${TARGET_USER} at UID=${current_uid}"
-    else
-      log "Remapping ${TARGET_USER} to UID=${HOST_UID}"
-      usermod -o -u "$HOST_UID" "$TARGET_USER"
-    fi
-  fi
-
-  refresh_target_home
   ensure_runtime_dirs
 }
 
