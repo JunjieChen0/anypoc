@@ -6,4 +6,5 @@
 !uv.lock
 !src/anypoc/infra/entrypoint.sh
 !projects/*/scripts/**
+!projects/jyy-pdf/repo/**
 !oss-projects/*/scripts/**

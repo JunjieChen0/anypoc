@@ -9,13 +9,18 @@ and manage sudo credentials.
 
 import atexit
 import os
-import pwd
 import subprocess
 import sys
 import threading
 from pathlib import Path
 
 from anypoc.utils import logger
+from anypoc.utils.platform import is_windows, safe_chown
+
+try:
+    import pwd
+except ImportError:
+    pwd = None  # type: ignore[assignment]
 
 LOG_PREFIX = "[Permissions]"
 
@@ -31,15 +36,15 @@ def get_real_user() -> tuple[str, int, int]:
         tuple: (username, uid, gid)
     """
 
-    # If running with sudo, SUDO_USER contains the original user
+    if sys.platform == "win32":
+        return (os.environ.get("USERNAME", "user"), 1000, 1000)
+
     sudo_user = os.environ.get("SUDO_USER")
 
     if sudo_user:
-        # Running with sudo - get original user's ID
         pw_record = pwd.getpwnam(sudo_user)
         return sudo_user, pw_record.pw_uid, pw_record.pw_gid
     else:
-        # Not running with sudo - use current user
         pw_record = pwd.getpwuid(os.getuid())
         return pw_record.pw_name, os.getuid(), os.getgid()
 
@@ -82,7 +87,7 @@ def fix_permissions_direct(
 
         try:
             # Fix the root path itself
-            os.chown(path, uid, gid)
+            safe_chown(path, uid, gid)
             fixed = 1
 
             # If it's a directory, recursively fix everything inside
@@ -90,7 +95,7 @@ def fix_permissions_direct(
                 for root, dirs, files in os.walk(path):
                     # Fix current directory
                     try:
-                        os.chown(root, uid, gid)
+                        safe_chown(root, uid, gid)
                     except Exception:
                         errors += 1
 
@@ -101,7 +106,7 @@ def fix_permissions_direct(
                             if is_broken_symlink(dir_path):
                                 skipped_symlinks += 1
                                 continue
-                            os.chown(dir_path, uid, gid)
+                            safe_chown(dir_path, uid, gid)
                             fixed += 1
                         except Exception:
                             errors += 1
@@ -113,7 +118,7 @@ def fix_permissions_direct(
                             if is_broken_symlink(file_path):
                                 skipped_symlinks += 1
                                 continue
-                            os.chown(file_path, uid, gid)
+                            safe_chown(file_path, uid, gid)
                             fixed += 1
                         except Exception:
                             errors += 1
@@ -195,6 +200,9 @@ def fix_permissions(
     # Filter to only existing paths
     existing_paths = [p for p in paths if p.exists()]
     if not existing_paths:
+        return 0
+
+    if is_windows():
         return 0
 
     is_root = os.getuid() == 0
@@ -527,6 +535,11 @@ def main() -> int:
     for p in paths:
         console.print(f"[dim]  - {p}[/dim]")
     console.print()
+
+    if is_windows():
+        console.print("[yellow]Note:[/yellow] Permission fixing is not needed on Windows.")
+        console.print("Docker Desktop handles volume permissions automatically.")
+        return 0
 
     username, uid, gid = get_real_user()
     is_root = os.getuid() == 0

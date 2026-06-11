@@ -1,7 +1,40 @@
 """Utility functions for the PoC module."""
 
 import os
+import sys
 from pathlib import Path
+
+# Windows compatibility: patch caw's fcntl usage before anything imports caw.
+# This MUST run before `from anypoc.utils.base_model import ...` because
+# base_model.py does `from caw import ...`.
+if sys.platform == "win32":
+    import json as _json
+    import shutil as _shutil
+    import types as _types
+
+    _fcntl_stub = _types.ModuleType("fcntl")
+    _fcntl_stub.LOCK_EX = 2  # type: ignore[attr-defined]
+    _fcntl_stub.LOCK_SH = 1  # type: ignore[attr-defined]
+    _fcntl_stub.LOCK_UN = 8  # type: ignore[attr-defined]
+    _fcntl_stub.flock = lambda *a, **kw: None  # type: ignore[attr-defined]
+    sys.modules.setdefault("fcntl", _fcntl_stub)
+
+    try:
+        import portalocker as _portalocker
+    except ImportError:
+        _portalocker = None  # type: ignore[assignment]
+
+    if _portalocker is not None:
+        import caw.storage as _caw_storage
+
+        def _patched_append(self, entry: dict) -> None:
+            if self._subagent:
+                entry = {**entry, "subagent": self._subagent}
+            with open(self._path, "a", encoding="utf-8") as f:
+                _portalocker.lock(f, _portalocker.LOCK_EX)
+                f.write(_json.dumps(entry) + "\n")
+
+        _caw_storage.JsonlWriter.append = _patched_append
 
 from anypoc.utils.base_model import (
     BaseModelWithHelpers,

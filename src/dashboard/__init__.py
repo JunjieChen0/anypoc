@@ -31,19 +31,37 @@ def _find_free_port() -> int:
         return s.getsockname()[1]
 
 
-def _daemonize(log_file: Path, dev_port: int) -> None:
-    """Fork into the background, redirecting std streams to *log_file*.
+_IS_WINDOWS = sys.platform == "win32"
 
-    In the parent, prints connection info and exits cleanly. In the child,
-    detaches from the controlling terminal, redirects stdin to /dev/null and
-    stdout/stderr to the log file (append mode), and returns so the caller
-    can continue with normal startup.
+
+def _daemonize(log_file: Path, dev_port: int) -> None:
+    """Launch dashboard as a detached background process.
+
+    On Unix, forks into the background with std streams redirected to *log_file*.
+    On Windows, re-invokes ourselves as a detached subprocess.
     """
     log_file.parent.mkdir(parents=True, exist_ok=True)
 
+    if _IS_WINDOWS:
+        cmd = [sys.executable, "-m", "dashboard", "--port", str(dev_port), "--output-dir", str(OUTPUT_DIR)]
+        creationflags = subprocess.CREATE_NEW_CONSOLE | subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+        proc = subprocess.Popen(
+            cmd,
+            stdout=open(log_file, "a"),
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+            creationflags=creationflags,
+            cwd=str(Path(__file__).parent.parent),
+        )
+        typer.echo("Dashboard started in headless mode.")
+        typer.echo(f"  PID:  {proc.pid}")
+        typer.echo(f"  Log:  {log_file}")
+        typer.echo(f"  URL:  http://localhost:{dev_port}")
+        typer.echo(f"  Stop: taskkill /PID {proc.pid} /T")
+        raise typer.Exit(0)
+
     pid = os.fork()
     if pid > 0:
-        # Parent: tell the user what happened and exit.
         typer.echo("Dashboard started in headless mode.")
         typer.echo(f"  PID:  {pid}")
         typer.echo(f"  Log:  {log_file}")
@@ -51,10 +69,8 @@ def _daemonize(log_file: Path, dev_port: int) -> None:
         typer.echo(f"  Stop: kill {pid}")
         raise typer.Exit(0)
 
-    # Child: detach from the controlling terminal.
     os.setsid()
 
-    # Write a run header before redirecting so it lands in the log.
     header = (
         f"\n=== dashboard started at {datetime.now().isoformat(timespec='seconds')} "
         f"pid={os.getpid()} port={dev_port} ===\n"
@@ -62,7 +78,6 @@ def _daemonize(log_file: Path, dev_port: int) -> None:
     with open(log_file, "ab") as fh:
         fh.write(header.encode())
 
-    # Redirect stdin to /dev/null, stdout/stderr to the log file (append mode).
     devnull_fd = os.open(os.devnull, os.O_RDONLY)
     os.dup2(devnull_fd, 0)
     os.close(devnull_fd)
@@ -130,6 +145,7 @@ def dashboard(
     # start_new_session=True so we can signal the whole uvicorn tree
     # (reloader + worker) via os.killpg below.
     env = {**os.environ, "POC_OUTPUT_DIR": output_dir}
+    _popen_kwargs = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if _IS_WINDOWS else {"start_new_session": True}
     api_proc = subprocess.Popen(
         [
             sys.executable,
@@ -144,7 +160,7 @@ def dashboard(
         ],
         cwd=Path(__file__).parent.parent,
         env=env,
-        start_new_session=True,
+        **_popen_kwargs,
     )
 
     # Vite dev server (pass API port so vite proxy knows where to forward).
@@ -159,28 +175,33 @@ def dashboard(
         ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", str(dev_port)],
         cwd=DASHBOARD_DIR,
         env=vite_env,
-        start_new_session=True,
+        **_popen_kwargs,
     )
 
     def _terminate(proc: subprocess.Popen) -> None:
         """Kill *proc* and all processes in its session/group."""
         if proc.poll() is not None:
             return
-        # proc was started with start_new_session=True, so its pid is also
-        # its process-group id. killpg reaches grandchildren that don't get
-        # SIGTERM forwarded by their parent (e.g. npm -> node).
-        try:
-            os.killpg(proc.pid, signal.SIGTERM)
-        except ProcessLookupError:
-            pass
-        try:
-            proc.wait(timeout=3)
-        except subprocess.TimeoutExpired:
+        if _IS_WINDOWS:
+            subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"], check=False, capture_output=True)
             try:
-                os.killpg(proc.pid, signal.SIGKILL)
+                proc.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+        else:
+            try:
+                os.killpg(proc.pid, signal.SIGTERM)
             except ProcessLookupError:
                 pass
-            proc.wait()
+            try:
+                proc.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                proc.wait()
 
     def cleanup():
         _terminate(vite_proc)
@@ -193,8 +214,11 @@ def dashboard(
 
     # Ensure cleanup on exit
     atexit.register(cleanup)
-    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     signal.signal(signal.SIGINT, lambda *_: sys.exit(0))
+    if hasattr(signal, "SIGTERM"):
+        signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    if hasattr(signal, "SIGBREAK"):
+        signal.signal(signal.SIGBREAK, lambda *_: sys.exit(0))
 
     try:
         vite_proc.wait()

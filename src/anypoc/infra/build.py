@@ -25,6 +25,7 @@ from rich.table import Table
 
 from anypoc.infra.executor import _caw_auth_docker_args, get_forwarded_env_args
 from anypoc.utils import PROJECT_ROOT
+from anypoc.utils.platform import chmod_executable, get_uid_gid
 
 console = Console()
 
@@ -152,8 +153,8 @@ def get_env_build_args() -> dict[str, str]:
     # Bake the host user's UID/GID into the playground account so files chowned
     # to playground inside the image (e.g. /opt/<project>) are owned by the same
     # UID on the host. Avoids the need for runtime usermod remapping.
-    build_args["PLAYGROUND_UID"] = str(os.getuid())
-    build_args["PLAYGROUND_GID"] = str(os.getgid())
+    build_args["PLAYGROUND_UID"] = str(get_uid_gid()[0])
+    build_args["PLAYGROUND_GID"] = str(get_uid_gid()[1])
     return build_args
 
 
@@ -628,7 +629,6 @@ def run(
         p infra run firefox --xrdp 3999
         p infra run sqlite --cmd "sqlite3 /test.db"
     """
-    import os
     import tempfile
 
     from anypoc.project import Project
@@ -723,7 +723,7 @@ echo ''
     temp_file = tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False)
     temp_file.write(script_content)
     temp_file.close()
-    Path(temp_file.name).chmod(0o755)
+    chmod_executable(temp_file.name)
     startup_script = Path(temp_file.name)
 
     container_project_dir = f"/home/playground/.anypoc/projects/{project.name}"
@@ -737,9 +737,9 @@ echo ''
         "--user",
         "root",
         "-e",
-        f"HOST_UID={os.getuid()}",
+        f"HOST_UID={get_uid_gid()[0]}",
         "-e",
-        f"HOST_GID={os.getgid()}",
+        f"HOST_GID={get_uid_gid()[1]}",
         "-e",
         "ANYPOC_HOME=/home/playground/.anypoc",
     ]

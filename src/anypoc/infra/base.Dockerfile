@@ -47,11 +47,11 @@ ENV PATH="/opt/uv:/opt/node/bin:/usr/local/bin:${PATH}"
 # Install shared coding CLIs in the base image.
 RUN npm install -g @openai/codex
 RUN mkdir -p /opt/claude-home && \
-    HOME=/opt/claude-home bash -lc 'curl -fsSL https://claude.ai/install.sh | bash' && \
+    (HOME=/opt/claude-home bash -lc 'curl -fsSL https://claude.ai/install.sh | bash' && \
     if [ ! -x /usr/local/bin/claude ]; then \
         test -e /opt/claude-home/.local/bin/claude && \
         ln -sf /opt/claude-home/.local/bin/claude /usr/local/bin/claude; \
-    fi
+    fi) || echo "WARNING: Failed to install claude CLI (network issue), skipping"
 
 # Pre-install anypoc's dependency closure so the cached venv is ready at
 # container start. The project source itself is NOT copied into the image —

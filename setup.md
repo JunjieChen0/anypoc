@@ -20,7 +20,7 @@ If exit code is non-zero, Docker is missing or its daemon is not running. Detect
 
 - `Linux` → point to `https://docs.docker.com/engine/install/`. For Ubuntu/Debian the one-liner is `curl -fsSL https://get.docker.com | sh` followed by `sudo usermod -aG docker $USER` and a re-login.
 - `Darwin` → point to `https://docs.docker.com/desktop/install/mac-install/`.
-- Windows (detected via `MINGW`/`MSYS`/`CYGWIN` in `uname -s`, or by user mention) → tell the user **anypoc has never been tested on Windows** and is not supported by this guide. Ask them to install Docker, Python 3.10+, and (optionally) uv themselves, set up a venv, and run `pip install -e .` manually. Then stop — do not attempt the rest of this guide on Windows.
+- Windows → point to `https://docs.docker.com/desktop/install/windows-install/`. Docker Desktop for Windows is supported — AnyPoC runs natively on Windows with no WSL2 requirement (though WSL2 backend for Docker Desktop is recommended). Install Python 3.10+ (from `python.org` or the Microsoft Store) and then continue to step 2.
 
 Do not attempt to install Docker yourself. Stop and ask the user to install it, then re-run this step. Do not proceed to step 2 until `docker info` exits 0.
 
@@ -42,9 +42,19 @@ uv sync                  # creates .venv/ and installs anypoc + runtime deps fro
 
 **If uv is not installed**, fall back to plain pip:
 
+On Linux/macOS:
+
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
+pip install -e .
+```
+
+On Windows (PowerShell):
+
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
 pip install -e .
 ```
 
@@ -68,7 +78,9 @@ If direnv is not installed, skip the `.envrc` step — the user will activate th
 Verify anypoc is callable:
 
 ```bash
-.venv/bin/anypoc --help >/dev/null
+.venv/bin/anypoc --help >/dev/null        # Linux/macOS
+# or
+.venv\Scripts\anypoc.exe --help            # Windows
 ```
 
 Do not proceed to step 3 if this fails.

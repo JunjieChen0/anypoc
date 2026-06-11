@@ -23,6 +23,7 @@ from typing import Annotated, Any, Callable, Optional, get_args, get_origin
 
 import typer
 from anypoc.utils import PROJECT_ROOT as _DEFAULT_PROJECT_ROOT
+from anypoc.utils.platform import get_total_memory_bytes, get_uid_gid
 from rich.console import Console
 
 from anypoc.utils import CAW_AUTH_DIR
@@ -130,7 +131,7 @@ class PlaygroundExecutor:
     ):
         self.image = image
         if memory_limit is None:
-            total_bytes = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
+            total_bytes = get_total_memory_bytes()
             memory_limit = f"{total_bytes // 4 // (1 << 30)}g"
         self.memory_limit = memory_limit
         # Default to project root by going up from this file's location (poc/infra/executor.py)
@@ -233,9 +234,9 @@ class PlaygroundExecutor:
             "--user",
             "root",  # Run as root so entrypoint can remap the runtime user first
             "-e",
-            f"HOST_UID={os.getuid()}",
+            f"HOST_UID={get_uid_gid()[0]}",
             "-e",
-            f"HOST_GID={os.getgid()}",
+            f"HOST_GID={get_uid_gid()[1]}",
         ]
 
         # Apply memory limit if configured
