@@ -2,6 +2,7 @@
 
 import atexit
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -32,6 +33,11 @@ def _find_free_port() -> int:
 
 
 _IS_WINDOWS = sys.platform == "win32"
+
+
+def _npm() -> str:
+    """Return the full path to npm (needed on Windows for .cmd resolution)."""
+    return shutil.which("npm") or "npm"
 
 
 def _daemonize(log_file: Path, dev_port: int) -> None:
@@ -116,7 +122,7 @@ def dashboard(
     node_modules = DASHBOARD_DIR / "node_modules"
     if not node_modules.exists() or install:
         typer.echo("Installing dependencies...")
-        subprocess.run(["npm", "install"], cwd=DASHBOARD_DIR, check=True)
+        subprocess.run([_npm(), "install"], cwd=DASHBOARD_DIR, check=True)
 
     if headless:
         _daemonize(log_file, dev_port)
@@ -172,7 +178,7 @@ def dashboard(
     if caw_viewer_port is not None:
         vite_env["VITE_CAW_VIEWER_PORT"] = str(caw_viewer_port)
     vite_proc = subprocess.Popen(
-        ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", str(dev_port)],
+        [_npm(), "run", "dev", "--", "--host", "0.0.0.0", "--port", str(dev_port)],
         cwd=DASHBOARD_DIR,
         env=vite_env,
         **_popen_kwargs,
@@ -236,10 +242,10 @@ def build():
     node_modules = DASHBOARD_DIR / "node_modules"
     if not node_modules.exists():
         typer.echo("Installing dependencies...")
-        subprocess.run(["npm", "install"], cwd=DASHBOARD_DIR, check=True)
+        subprocess.run([_npm(), "install"], cwd=DASHBOARD_DIR, check=True)
 
     typer.echo("Building dashboard...")
-    subprocess.run(["npm", "run", "build"], cwd=DASHBOARD_DIR, check=True)
+    subprocess.run([_npm(), "run", "build"], cwd=DASHBOARD_DIR, check=True)
     typer.echo(f"Built to {DASHBOARD_DIR / 'dist'}")
 
 
