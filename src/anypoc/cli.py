@@ -5,6 +5,7 @@ Central CLI for AnyPoC.
 Usage: anypoc <command> [options]
 """
 
+import shutil
 from enum import Enum
 from pathlib import Path
 from shutil import which
@@ -83,7 +84,12 @@ def install_repo_skills(repo_dir: Path, install_dir: Path) -> None:
             typer.echo(f"  {skill_dir.name}: skipped (non-symlink already exists at {target})")
             continue
 
-        target.symlink_to(resolved_skill_dir)
+        try:
+            target.symlink_to(resolved_skill_dir)
+        except OSError:
+            shutil.copytree(str(resolved_skill_dir), str(target), dirs_exist_ok=True)
+            typer.echo(f"  {skill_dir.name}: installed (copy) -> {resolved_skill_dir}")
+            continue
         typer.echo(f"  {skill_dir.name}: installed -> {resolved_skill_dir}")
 
 
